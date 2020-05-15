@@ -9,7 +9,7 @@ extra-deps:
 - containers-0.5.11.0
 - regex-compat-0.93.1
 - HaXml-1.25.5
-# - encoding-0.8.3 
-- git: git@github.com:dmwit/encoding
-  commit: 0.8.3
+- encoding-0.8.5 
+# - git: git@github.com:dmwit/encoding
+#   commit: 0.8.3
 

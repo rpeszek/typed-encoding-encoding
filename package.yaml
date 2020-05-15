@@ -21,7 +21,7 @@ description:         Please see the README on GitHub at <https://github.com/gith
 
 dependencies:
 - base >= 4.10 && < 5
-- encoding 
+- encoding >= 0.8.5 && < 0.9
 - typed-encoding
 - bytestring >= 0.10 && < 0.11
 
