@@ -9,6 +9,7 @@
 {-# LANGUAGE AllowAmbiguousTypes  #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ConstraintKinds #-}
 
 -- | Thin layer over the @encoding@ package to create types compatible
 -- with @type-encoding@.
@@ -25,8 +26,9 @@
 -- could be generated in the future.
 module Data.TypedEncoding.Ext.Combinators.Restriction.Encoding where 
 
-import           Data.TypedEncoding.Internal.Util.TypeLits
-import           Data.TypedEncoding.Instances.Support
+import           Data.TypedEncoding.Instances.Support (Enc, EncodeEx(..), UnexpectedDecodeErr, Algorithm)
+import qualified Data.TypedEncoding.Instances.Support as Support
+import           Data.TypedEncoding.Instances.Support.Unsafe (implTranF)
 
 import           Data.Encoding
 
@@ -40,116 +42,133 @@ import qualified Data.ByteString.Lazy as BL
 -- >>> :set -XOverloadedStrings -XDataKinds -XTypeApplications
 -- >>> import           Data.Functor.Identity
 
-type family IsEnc (s :: Symbol) :: Bool where
-    IsEnc s = AcceptEq ('Text "Not encoding restriction " ':<>: ShowType s ) (CmpSymbol "r-enc:" (Take 6 s))
+type family IsDynEnc (s :: Symbol) :: Bool where
+    IsDynEnc s = Support.AcceptEq ('Text "Not encoding restriction " ':<>: ShowType s ) (CmpSymbol (Support.TakeUntil s ":") "r-enc")
 
--- | Encoded witness makes this type safe
-getDynEncoding :: forall s xs c str. (KnownSymbol s, IsEnc s ~ 'True) => Enc (s ': xs) c str -> DynEncoding
+type DynEnc s = (KnownSymbol s, IsDynEnc s ~ 'True)
+
+-- | Gives type safety over existence of DynEncoding
+getDynEncoding :: forall s xs c str. (DynEnc s) => Enc (s ': xs) c str -> DynEncoding
 getDynEncoding _ = encodingFromString nm 
   where 
       p = Proxy :: Proxy s
       nm = L.drop 6 . symbolVal $ p
 
 
--- | combiniator version of 'EncodeF'
-encByteString :: forall f s xs c .
-              (
-                KnownSymbol s
-              , IsEnc s ~ 'True
-              , f ~ Either EncodeEx
-              ) => 
-              Enc xs c B.ByteString -> Either EncodeEx (Enc (s ': xs) c B.ByteString)  
-encByteString = implTranF (verifyEncoding (Proxy :: Proxy s) verifyDynEncoding decodeStrictByteStringExplicit)              
+instance (DynEnc s, Algorithm s "r-enc") => Support.Encode (Either EncodeEx) s "r-enc" c B.ByteString where
+    encoding = encDynB
 
--- | Combiniator version of 'EncodeF'
+encDynB :: forall s c .
+              (
+                DynEnc s
+                , Algorithm s "r-enc"
+               ) => 
+               Support.Encoding (Either EncodeEx) s "r-enc" c B.ByteString
+encDynB = Support._implEncodingEncodeEx @s  (Support.verifyDynEnc (Proxy :: Proxy s) verifyDynEncoding decodeStrictByteStringExplicit)              
+
+
+instance (DynEnc s, Algorithm s "r-enc") => Support.Encode (Either EncodeEx) s "r-enc" c BL.ByteString where
+    encoding = encDynBL
+
+-- | 
 --
 -- @"r-enc:"@ restriction encoding of @ByteString@ 
 --
 -- @"r-" encoding simply verifies that restriction is correct.
-encByteStringL :: forall f s xs c .
+encDynBL :: forall s xs c .
               (
-                KnownSymbol s
-              , IsEnc s ~ 'True
-              , f ~ Either EncodeEx
+               DynEnc s
+               , Algorithm s "r-enc"
               ) => 
-              Enc xs c BL.ByteString -> Either EncodeEx (Enc (s ': xs) c BL.ByteString)  
-encByteStringL = implTranF (verifyEncoding (Proxy :: Proxy s) verifyDynEncoding decodeLazyByteStringExplicit)              
+              Support.Encoding (Either EncodeEx) s "r-enc" c BL.ByteString
+encDynBL = Support._implEncodingEncodeEx @s (Support.verifyDynEnc (Proxy :: Proxy s) verifyDynEncoding decodeLazyByteStringExplicit)              
 
 
+instance (DynEnc s, Algorithm s "r-enc") => Support.ToEncString (Either EncodeEx) s "r-enc" String B.ByteString where
+  toEncF = toDynEncB
 
--- | Combiniator version of 'ToEncString'
+-- |
 -- 
--- >>> toEncByteString @"r-enc:cyrillic" "Статья"
--- Right (MkEnc Proxy () "\193\226\208\226\236\239")
+-- >>> toDynEncB @"r-enc:cyrillic" "Статья"
+-- Right (UnsafeMkEnc Proxy () "\193\226\208\226\236\239")
 --
 -- >>> "Статья"
 -- "\1057\1090\1072\1090\1100\1103"
-toEncByteString :: forall s .
+toDynEncB :: forall s .
              (
-                KnownSymbol s
-              , IsEnc s ~ 'True
-                ) => 
+                DynEnc s
+               , Algorithm s "r-enc"
+               ) => 
               String -> Either EncodeEx (Enc '[s] () B.ByteString)
-toEncByteString s = 
+toDynEncB s = 
     do 
-        enc <- cvrtToEncodeEx p . verifyDynEncoding $ p
-        fmap (unsafeSetPayload ()) . cvrtToEncodeEx p . encodeStrictByteStringExplicit enc $ s
+        enc <- Support.asEncodeEx p . verifyDynEncoding $ p
+        fmap (Support.unsafeSetPayload ()) . Support.asEncodeEx p . encodeStrictByteStringExplicit enc $ s
         where 
           p = Proxy :: Proxy s
 
--- | Combiniator version of 'ToEncString'
---
--- It converts 'String' to some @Enc '["r-enc:..."] () BL.ByteString@ type
+
+instance (DynEnc s, Algorithm s "r-enc") => Support.ToEncString (Either EncodeEx) s "r-enc" String BL.ByteString where
+  toEncF = toDynEncBL
+
+-- | 
+-- Converts 'String' to some @Enc '["r-enc:..."] () BL.ByteString@ type
 -- by actually encoding characters in the String into correct byte layout.
-toEncByteStringL :: forall s .
+toDynEncBL :: forall s .
              (
-                KnownSymbol s
-              , IsEnc s ~ 'True
+                DynEnc s
+                , Algorithm s "r-enc"
                 ) => 
               String -> Either EncodeEx (Enc '[s] () BL.ByteString)
-toEncByteStringL s = 
+toDynEncBL s = 
     do 
-        enc <- cvrtToEncodeEx p $ verifyDynEncoding p
-        fmap (unsafeSetPayload ()) . cvrtToEncodeEx p . encodeLazyByteStringExplicit enc $ s
+        enc <- Support.asEncodeEx p $ verifyDynEncoding p
+        fmap (Support.unsafeSetPayload ()) . Support.asEncodeEx p . encodeLazyByteStringExplicit enc $ s
         where 
           p = Proxy :: Proxy s
 
 
--- | Combiniator version of 'FromEncString'
+instance (UnexpectedDecodeErr f, Monad f, DynEnc s, Algorithm s "r-enc") => Support.FromEncString f s "r-enc" String B.ByteString where
+  fromEncF = fromDynEncB
+
+-- |
 --
--- >>> fromEncByteString @"r-enc:cyrillic" @Identity (unsafeSetPayload () "\193\226\208\226\236\239")
+-- >>> fromDynEncB @"r-enc:cyrillic" @Identity (Support.unsafeSetPayload () "\193\226\208\226\236\239")
 -- Identity "\1057\1090\1072\1090\1100\1103"
-fromEncByteString :: forall s f .
+fromDynEncB :: forall s f .
                      (UnexpectedDecodeErr f
                      , Monad f
-                     , KnownSymbol s
-                     , IsEnc s ~ 'True
-                     ) => 
+                     , DynEnc s
+                     , Algorithm s "r-enc"
+                    ) => 
                      Enc '[s] () B.ByteString -> f String
-fromEncByteString x = 
+fromDynEncB x = 
   do 
-    enc <- asUnexpected @s . verifyDynEncoding $ p
-    asUnexpected @s . decodeStrictByteStringExplicit enc . getPayload $ x
+    enc <- Support.asUnexpected @s . verifyDynEncoding $ p
+    Support.asUnexpected @s . decodeStrictByteStringExplicit enc . Support.getPayload $ x
   where p = Proxy :: Proxy s
 
 
--- | Combiniator version of 'FromEncString'
-fromEncByteStringL :: forall s f .
+instance (UnexpectedDecodeErr f, Monad f, DynEnc s, Algorithm s "r-enc") => Support.FromEncString f s "r-enc" String BL.ByteString where
+  fromEncF = fromDynEncBL
+
+
+fromDynEncBL :: forall s f .
                      (UnexpectedDecodeErr f
                      , Monad f
-                     , KnownSymbol s
-                     , IsEnc s ~ 'True
-                     ) => 
+                     , DynEnc s
+                     , Algorithm s "r-enc"
+                    ) => 
                      Enc '[s] () BL.ByteString -> f String
-fromEncByteStringL x = 
+fromDynEncBL x = 
   do 
-    enc <- asUnexpected @s . verifyDynEncoding $ p
-    asUnexpected @s . decodeLazyByteStringExplicit enc . getPayload $ x
+    enc <- Support.asUnexpected @s . verifyDynEncoding $ p
+    Support.asUnexpected @s . decodeLazyByteStringExplicit enc . Support.getPayload $ x
   where p = Proxy :: Proxy s
 
 -- private ---
 
-verifyDynEncoding :: (KnownSymbol s, IsEnc s ~ 'True) => Proxy s -> Either String DynEncoding
+verifyDynEncoding :: (KnownSymbol s, DynEnc s) => Proxy s -> Either String DynEncoding
 verifyDynEncoding p = explainMaybe ("Invalid encoding " ++ nm) . encodingFromStringExplicit $ nm 
   where 
       nm = L.drop 6 . symbolVal $ p
@@ -157,16 +176,5 @@ verifyDynEncoding p = explainMaybe ("Invalid encoding " ++ nm) . encodingFromStr
       explainMaybe msg Nothing = Left msg
 
 
--- could be moved to main project
-verifyEncoding :: forall s str err1 err2 enc a. (KnownSymbol s, Show err1, Show err2) => Proxy s -> (Proxy s -> Either err1 enc) -> (enc -> str -> Either err2 a) -> str -> Either EncodeEx str
-verifyEncoding p findenc decoder str = 
-  do
-    enc <- cvrtToEncodeEx p . findenc $ p
-    case decoder enc str of
-      Left err -> Left $ EncodeEx p err
-      Right r -> Right str
 
-cvrtToEncodeEx
-  :: (Show a, KnownSymbol x) => Proxy x -> Either a b -> Either EncodeEx b
-cvrtToEncodeEx p = either (Left . EncodeEx p) Right 
 
