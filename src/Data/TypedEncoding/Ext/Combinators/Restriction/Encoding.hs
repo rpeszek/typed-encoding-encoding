@@ -11,8 +11,8 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ConstraintKinds #-}
 
--- | This package is a thin layer over the @encoding@ package to create types compatible
--- with @type-encoding@.
+-- | This package is a thin layer over the /encoding/ package to create types compatible
+-- with /type-encoding/.
 --
 -- This module contains combinators which are polymorphic in the symbol annotation.
 --
