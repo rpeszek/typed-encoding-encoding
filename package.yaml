@@ -22,12 +22,16 @@ description:         Please see the README on GitHub at <https://github.com/gith
 dependencies:
 - base >= 4.10 && < 5
 - encoding >= 0.8.5 && < 0.9
-- typed-encoding
+- typed-encoding >= 0.3 && < 0.4
 - bytestring >= 0.10 && < 0.11
 
 
 library:
   source-dirs: src
+  ghc-options:
+    - -fwarn-unused-imports
+    - -fwarn-incomplete-patterns
+    - -fprint-explicit-kinds
 
 
 tests:
