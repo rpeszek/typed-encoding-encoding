@@ -11,18 +11,12 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ConstraintKinds #-}
 
--- | Thin layer over the @encoding@ package to create types compatible
+-- | This package is a thin layer over the @encoding@ package to create types compatible
 -- with @type-encoding@.
---
--- ## Naming convention
--- 
--- @"r-lib/encoding:[encoding]"@ - where @"[encoding]"@ is String name used by the 'Encoding.DynEncoding' in /encoding/ package.
---
--- Example: @"r-lib/encoding:cyrillic"@
 --
 -- This module contains combinators which are polymorphic in the symbol annotation.
 --
--- Sadly, /encoding/ library does not provide ways to encode and decode from the popular /Text/ type (/text/ package).  
+-- Sadly, /encoding/ library does not provide ways to encode and decode the popular @Text@ type (from the /text/ package).  
 --
 -- Key instances defined here are 'Typed.ToEncString' and 'Typed.FromEncString'.
 -- These allow to create encoded @ByteString@ from a String (@ToEncString@) and decode @ByteString@ back (@ToEncString@).
@@ -30,6 +24,13 @@
 -- Other instances are less interesting and provide validation facilities.
 --
 -- It should be possible to create more efficient versions of 'Typed.Encode' in the future, which do not use String decoding under the hood.
+--
+-- == Naming conventions
+-- 
+-- @"r-lib/encoding:[encoding]"@ - where @"[encoding]"@ is String name used by the 'Encoding.DynEncoding' in /encoding/ package.
+--
+-- Example: @"r-lib/encoding:cyrillic"@
+
 module Data.TypedEncoding.Ext.Combinators.Restriction.Encoding where 
 
 import qualified Data.TypedEncoding.Instances.Support as Typed
@@ -55,7 +56,15 @@ type DynEnc s = (KnownSymbol s, IsDynEnc s ~ 'True)
 
 -- |
 -- 
--- >>> Usage.displ <$> Usage.toEncStringF' @"r-lib/encoding" @"r-lib/encoding:cyrillic" @(Either Usage.EncodeEx) @String @B.ByteString "Статья"
+-- >>> :{
+-- Usage.displ 
+--  <$> Usage.toEncStringF' 
+--   @"r-lib/encoding" 
+--   @"r-lib/encoding:cyrillic" 
+--   @(Either Usage.EncodeEx) 
+--   @String 
+--   @B.ByteString "Статья"
+-- :}
 -- Right "Enc '[r-lib/encoding:cyrillic] () (ByteString \193\226\208\226\236\239)"
 
 instance (DynEnc s, Typed.Algorithm s "r-lib/encoding") => Typed.ToEncString (Either Typed.EncodeEx) s "r-lib/encoding" String B.ByteString where
@@ -66,7 +75,15 @@ instance (DynEnc s, Typed.Algorithm s "r-lib/encoding") => Typed.ToEncString (Ei
 
 -- |
 -- 
--- >>> Usage.displ <$> Usage.fromEncStringF' @"r-lib/encoding" @"r-lib/encoding:cyrillic" @(Either Usage.UnexpectedDecodeEx) @String @B.ByteString (Typed.unsafeSetPayload () "\193\226\208\226\236\239")
+-- >>> :{
+-- Usage.displ <$> 
+--  Usage.fromEncStringF' 
+--   @"r-lib/encoding" 
+--   @"r-lib/encoding:cyrillic" 
+--   @(Either Usage.UnexpectedDecodeEx) 
+--   @String @B.ByteString 
+--    (Typed.unsafeSetPayload () "\193\226\208\226\236\239")
+-- :}
 -- Right "(String \1057\1090\1072\1090\1100\1103)"
 instance (Typed.UnexpectedDecodeErr f, Monad f, DynEnc s, Typed.Algorithm s "r-lib/encoding") => Typed.FromEncString f s "r-lib/encoding" String B.ByteString where
   fromEncF = fromDynEncB
@@ -76,12 +93,28 @@ instance (Typed.UnexpectedDecodeErr f, Monad f, DynEnc s, Typed.Algorithm s "r-l
 
 
 -- |
--- These are just verifications of byte layouts
--- 
--- >>> fmap Usage.displ . Usage.encodeFAll' @'["r-lib/encoding"] @'["r-lib/encoding:cyrillic"] @(Either Usage.EncodeEx) @() @B.ByteString . Usage.toEncoding () $ "\193\226\208\226\236\255"
+-- >>> :{ 
+-- fmap Usage.displ 
+--  . Usage.encodeFAll' 
+--     @'["r-lib/encoding"] 
+--     @'["r-lib/encoding:cyrillic"] 
+--     @(Either Usage.EncodeEx) 
+--     @() 
+--     @B.ByteString 
+--     . Usage.toEncoding () $ "\193\226\208\226\236\255"
+-- :}
 -- Right "Enc '[r-lib/encoding:cyrillic] () (ByteString \193\226\208\226\236\255)"
 --
--- >>> fmap Usage.displ . Usage.encodeFAll' @'["r-lib/encoding"] @'["r-lib/encoding:greek"] @(Either Usage.EncodeEx) @() @B.ByteString . Usage.toEncoding () $ "\193\226\208\226\236\255"
+-- >>> :{ 
+-- fmap Usage.displ 
+--  . Usage.encodeFAll' 
+--   @'["r-lib/encoding"] 
+--   @'["r-lib/encoding:greek"] 
+--   @(Either Usage.EncodeEx) 
+--   @() 
+--   @B.ByteString 
+--   . Usage.toEncoding () $ "\193\226\208\226\236\255"
+-- :}
 -- Left (EncodeEx "r-lib/encoding:greek" (IllegalCharacter 255))
 instance (DynEnc s, Typed.Algorithm s "r-lib/encoding") => Typed.Encode (Either Typed.EncodeEx) s "r-lib/encoding" c B.ByteString where
     encoding = encDynB
@@ -95,21 +128,24 @@ instance (KnownSymbol s, Typed.Restriction s, Typed.Algorithm s "r-lib/encoding"
 -- |
 -- For "r-" encodings this is the same as @Encode@.
 --
--- >>> fmap Usage.displ . Usage.recreateFAll' @'["r-lib/encoding"] @'["r-lib/encoding:greek"] @(Either Usage.RecreateEx) @() @B.ByteString  . Usage.toEncoding () $ "\193\226\208\226\236\255"
+-- >>> :{ 
+-- fmap Usage.displ 
+--   . Usage.recreateFAll' 
+--   @'["r-lib/encoding"] 
+--   @'["r-lib/encoding:greek"] 
+--   @(Either Usage.RecreateEx) 
+--   @() 
+--   @B.ByteString  
+--   . Usage.toEncoding () $ "\193\226\208\226\236\255"
+-- :}
 -- Left (RecreateEx "r-lib/encoding:greek" (IllegalCharacter 255))
 instance (KnownSymbol s , DynEnc s, Typed.Algorithm s "r-lib/encoding", Typed.RecreateErr f, Applicative f) => Typed.Validate f s "r-lib/encoding" c B.ByteString where
     validation = Typed.validFromEnc' @"r-lib/encoding" encDynB
 
 
--- * Combinators
+-- * Encoding Combinators
 
--- | Gives type safety over existence of Encoding.DynEncoding
-getDynEncoding :: forall s xs c str. (DynEnc s) => Typed.Enc (s ': xs) c str -> Encoding.DynEncoding
-getDynEncoding _ = Encoding.encodingFromString nm 
-  where 
-      p = Proxy :: Proxy s
-      nm = L.drop 6 . symbolVal $ p
-
+-- | Encoding ByteString just verifies its byte layout
 encDynB :: forall s c .
               (
                 DynEnc s
@@ -125,6 +161,8 @@ encDynBL :: forall s xs c .
               ) => 
               Typed.Encoding (Either Typed.EncodeEx) s "r-lib/encoding" c BL.ByteString
 encDynBL = Typed._implEncodingEncodeEx @s (Typed.verifyDynEnc (Proxy :: Proxy s) verifyDynEncoding Encoding.decodeLazyByteStringExplicit)              
+
+-- * Conversion To ByteString
 
 -- |
 -- 
@@ -170,6 +208,8 @@ toDynEncBL s =
           p = Proxy :: Proxy s
 
 
+-- * Conversion From ByteString
+
 -- |
 --
 -- >>> fromDynEncB @"r-lib/encoding:cyrillic" @Identity (Typed.unsafeSetPayload () "\193\226\208\226\236\239")
@@ -204,7 +244,16 @@ fromDynEncBL x =
     Typed.asUnexpected @s . Encoding.decodeLazyByteStringExplicit enc . Typed.getPayload $ x
   where p = Proxy :: Proxy s
 
--- * Private
+
+-- * Helpers
+-- | Provides type safety over existence of 'Encoding.DynEncoding'
+getDynEncoding :: forall s xs c str. (DynEnc s) => Typed.Enc (s ': xs) c str -> Encoding.DynEncoding
+getDynEncoding _ = Encoding.encodingFromString nm 
+  where 
+      p = Proxy :: Proxy s
+      nm = L.drop 6 . symbolVal $ p
+
+-- * Implementation
 
 verifyDynEncoding :: (KnownSymbol s, DynEnc s) => Proxy s -> Either String Encoding.DynEncoding
 verifyDynEncoding p = explainMaybe ("Invalid encoding " ++ nm) . Encoding.encodingFromStringExplicit $ nm 
