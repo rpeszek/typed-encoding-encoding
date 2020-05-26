@@ -265,9 +265,6 @@ verifyDynEncoding p = explainMaybe ("Invalid encoding " ++ nm) . Encoding.encodi
 
 -- * (incomplete) mapping set for String / ByteString conversions to work
 
-
--- :t Tst.pack :: Typed.Enc '["r-pkg/encoding:windows_1255"] c String -> _
-
 type instance Typed.IsSupersetOpen "r-ASCII" "r-pkg/encoding:ascii"           x xs = 'True
 type instance Typed.IsSupersetOpen "r-ASCII" "r-pkg/encoding:646"             x xs = 'True
 type instance Typed.IsSupersetOpen "r-ASCII" "r-pkg/encoding:ansi_x3_4_1968"  x xs = 'True
@@ -418,3 +415,6 @@ type instance Typed.IsSupersetOpen "r-CHAR8" "r-pkg/encoding:cp866"             
 type instance Typed.IsSupersetOpen "r-CHAR8" "r-pkg/encoding:cp869"             x xs = 'True  
 type instance Typed.IsSupersetOpen "r-CHAR8" "r-pkg/encoding:cp874"             x xs = 'True  
 type instance Typed.IsSupersetOpen "r-CHAR8" "r-pkg/encoding:cp932"             x xs = 'True  
+
+
+-- :t Tst.pack :: Typed.Enc '["r-pkg/encoding:windows_1255"] c String -> _
