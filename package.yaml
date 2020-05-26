@@ -22,7 +22,7 @@ description:         Please see the README on GitHub at <https://github.com/gith
 dependencies:
 - base >= 4.10 && < 5
 - encoding >= 0.8.5 && < 0.9
-- typed-encoding >= 0.3 && < 0.4
+- typed-encoding >= 0.4 && < 0.5
 - bytestring >= 0.10 && < 0.11
 
 
