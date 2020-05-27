@@ -13,14 +13,15 @@ module Test.SupersetSpec where
 
 import           Data.TypedEncoding.Instances.Restriction.ASCII ()
 import           Data.TypedEncoding.Instances.Restriction.UTF8 ()
-import qualified Data.TypedEncoding.Instances.Restriction.CHAR8 as CHAR8
+-- import qualified Data.TypedEncoding.Instances.Restriction.CHAR8 as CHAR8
 
 import           Data.TypedEncoding.Pkg.Instances.Restriction.Encoding 
+
 
 import           Data.TypedEncoding 
 
 import           Test.QuickCheck.Instances.ByteString ()
-import qualified Data.ByteString as B
+-- import qualified Data.ByteString as B
 import           Test.QuickCheck
 -- import           Test.QuickCheck.Property
 import           Test.Hspec
@@ -34,7 +35,7 @@ spec =
              
             -- checking r-CHAR8  is useless as valid "r-" encoding are 1 byte layouts, encoded means set of char encoded bytes < 255
             -- this is basically true for all encodings
-               
+
             -- it "r-CHAR8 > wrong"         $ property $ propSuperset_ @"r-CHAR8" @"r-pkg/encoding:jis_x_0208"     CHAR8.testEncCHAR8 encDynS 
             -- 
             -- it "r-CHAR8 > koi8_r"        $ property $ propSuperset_ @"r-CHAR8" @"r-pkg/encoding:koi8_r"      CHAR8.testEncCHAR8 encDynS

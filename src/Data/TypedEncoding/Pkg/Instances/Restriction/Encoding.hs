@@ -24,13 +24,14 @@
 -- Key instances defined here are 'Typed.ToEncString' and 'Typed.FromEncString'.
 -- These allow to create encoded @ByteString@ from a String (@ToEncString@) and decode @ByteString@ back (@ToEncString@).
 --
--- Other instances are less interesting and provide validation facilities.
+-- Other instances are less interesting, are very expensive, and only provide validation facilities.
 --
--- It should be possible to create more efficient versions of 'Typed.Encode' in the future, which do not use String decoding under the hood.
+-- It should be possible to create more efficient versions of 'Typed.Encode' in the future, which do not use String decoding under the hood
+-- but because of the forgiving nature of decode architecture in this library this may not fix the core performance problem.
 --
 -- == Naming conventions
 -- 
--- @"r-pkg/encoding:[encoding]"@ - where @"[encoding]"@ is String name used by the 'Encoding.DynEncoding' in /encoding/ package.
+-- @"r-pkg/encoding:[encoding]"@ - where @"[encoding]"@ is String name used by the 'Encoding.DynEncoding' in the /encoding/ package.
 --
 -- Example: @"r-pkg/encoding:cyrillic"@
 
@@ -79,6 +80,9 @@ instance (DynEnc s, Typed.Algorithm s "r-pkg/encoding") => Typed.ToEncString (Ei
 instance (DynEnc s, Typed.Algorithm s "r-pkg/encoding") => Typed.ToEncString (Either Typed.EncodeEx) s "r-pkg/encoding" String BL.ByteString where
   toEncF = toDynEncBL
 
+instance (DynEnc s, Typed.Algorithm s "r-pkg/encoding") => Typed.ToEncString (Either Typed.EncodeEx) s "r-pkg/encoding" String String where
+  toEncF = toDynEncS
+
 -- |
 -- 
 -- >>> :{
@@ -97,6 +101,13 @@ instance (Typed.UnexpectedDecodeErr f, Monad f, DynEnc s, Typed.Algorithm s "r-p
 instance (Typed.UnexpectedDecodeErr f, Monad f, DynEnc s, Typed.Algorithm s "r-pkg/encoding") => Typed.FromEncString f s "r-pkg/encoding" String BL.ByteString where
   fromEncF = fromDynEncBL
 
+instance (Typed.UnexpectedDecodeErr f, Monad f, DynEnc s, Typed.Algorithm s "r-pkg/encoding") => Typed.FromEncString f s "r-pkg/encoding" String String where
+  fromEncF = fromDynEncS
+
+
+-------------------------
+-- Questionable Encode / Validate / Decode instances
+-------------------------
 
 -- |
 -- >>> :{ 
@@ -148,75 +159,9 @@ instance (KnownSymbol s, Typed.Restriction s, Typed.Algorithm s "r-pkg/encoding"
 instance (KnownSymbol s , DynEnc s, Typed.Algorithm s "r-pkg/encoding", Typed.RecreateErr f, Applicative f) => Typed.Validate f s "r-pkg/encoding" c B.ByteString where
     validation = Typed.validFromEnc' @"r-pkg/encoding" encDynB
 
-
--- * Encoding Combinators
-
-data DecodeOrEncodeException = 
-  DecErr Encoding.DecodingException 
-  | EncErr Encoding.EncodingException 
-  | DecEncMismatch 
-  deriving (Show, Eq)
-
--- | Encoding ByteString just verifies its byte layout
--- 
--- /encoding/ package decoding is very forgiving, can decode invalid data, this makes things hard:
---
--- Encoding.decodeStrictByteStringExplicit EncUTF8.UTF8 "\192\NUL"
--- Right "\NUL"
--- Encoding.encodeStrictByteStringExplicit EncUTF8.UTF8 "\NUL"
--- "\NUL"
---
--- >>> Encoding.decodeStrictByteStringExplicit EncASCII.ASCII "\239"
--- Right "\239"
-
-
-encDynB :: forall s c .
-              (
-                DynEnc s
-                , Typed.Algorithm s "r-pkg/encoding"
-               ) => 
-               Typed.Encoding (Either Typed.EncodeEx) s "r-pkg/encoding" c B.ByteString
-encDynB = Typed._implEncodingEncodeEx @s  (Typed.verifyDynEnc (Proxy :: Proxy s) exferDynEncoding slowValidation)   
-   where 
-     -- see comments in fromDynEncB
-     slowValidation enc str = do
-        dec <- either (Left . DecErr) Right . Encoding.decodeStrictByteStringExplicit enc $ str
-        res <- either (Left . EncErr) Right . Encoding.encodeStrictByteStringExplicit enc $ dec  
-        if str == res 
-        then Right str
-        else Left DecEncMismatch      
-
-encDynBL :: forall s xs c .
-              (
-               DynEnc s
-               , Typed.Algorithm s "r-pkg/encoding"
-              ) => 
-              Typed.Encoding (Either Typed.EncodeEx) s "r-pkg/encoding" c BL.ByteString
-encDynBL = Typed._implEncodingEncodeEx @s (Typed.verifyDynEnc (Proxy :: Proxy s) exferDynEncoding slowValidation)              
-   where 
-     -- see comments in fromDynEncB
-     slowValidation enc str = do
-        dec <- either (Left . DecErr) Right . Encoding.decodeLazyByteStringExplicit enc $ str
-        res <- either (Left . EncErr) Right . Encoding.encodeLazyByteStringExplicit enc $ dec         
-        if str == res 
-        then Right str
-        else Left DecEncMismatch      
-
-encDynS :: forall s c .
-              (
-                DynEnc s
-                , Typed.Algorithm s "r-pkg/encoding"
-               ) => 
-               Typed.Encoding (Either Typed.EncodeEx) s "r-pkg/encoding" c String
-encDynS = Typed._implEncodingEncodeEx @s  (Typed.verifyDynEnc (Proxy :: Proxy s) exferDynEncoding slowValidation)   
-   where 
-     -- see comments in fromDynEncB
-     slowValidation enc str = do
-        dec <- either (Left . DecErr) Right . Encoding.decodeStringExplicit enc $ str
-        res <- either (Left . EncErr) Right . Encoding.encodeStringExplicit enc $ dec  
-        if str == res 
-        then Right str
-        else Left DecEncMismatch      
+-------------------------
+-- End Questionable Encode / Validate / Decode instances
+-------------------------
 
 -- * Conversion To ByteString
 
@@ -266,6 +211,24 @@ toDynEncBL s =
         where 
           p = Proxy :: Proxy s
 
+-- * Conversion to encoded String
+
+-- | 
+-- Converts 'String' to some @Enc '["r-pkg/encoding:..."] () String@ type
+-- by actually encoding characters in the String into correct byte layout.
+toDynEncS :: forall s .
+             (
+                DynEnc s
+                , Typed.Algorithm s "r-pkg/encoding"
+                ) => 
+              String -> Either Typed.EncodeEx (Typed.Enc '[s] () String)
+toDynEncS s = 
+    do 
+        enc <- Typed.asEncodeEx p $ exferDynEncoding p
+        fmap (Typed.unsafeSetPayload ()) . Typed.asEncodeEx p . Encoding.encodeStringExplicit enc $ s
+        where 
+          p = Proxy :: Proxy s
+
 
 -- * Conversion From ByteString
 
@@ -312,6 +275,92 @@ fromDynEncBL x =
     enc <- Typed.asUnexpected @s . exferDynEncoding $ p
     Typed.asUnexpected @s . Encoding.decodeLazyByteStringExplicit enc . Typed.getPayload $ x
   where p = Proxy :: Proxy s
+
+
+-- * Conversion From encoded String
+
+fromDynEncS :: forall s f .
+                     (Typed.UnexpectedDecodeErr f
+                     , Monad f
+                     , DynEnc s
+                     , Typed.Algorithm s "r-pkg/encoding"
+                    ) => 
+                     Typed.Enc '[s] () String -> f String
+fromDynEncS x = 
+  do 
+    enc <- Typed.asUnexpected @s . exferDynEncoding $ p
+    Typed.asUnexpected @s . Encoding.decodeStringExplicit enc . Typed.getPayload $ x
+  where p = Proxy :: Proxy s
+
+
+
+-- * Encoding Combinators (Slow)
+
+data DecodeOrEncodeException = 
+  DecErr Encoding.DecodingException 
+  | EncErr Encoding.EncodingException 
+  | DecEncMismatch 
+  deriving (Show, Eq)
+
+
+-- | Encoding ByteString just verifies its byte layout
+-- 
+-- /encoding/ package decoding is very forgiving, can decode invalid data, this makes things hard:
+--
+-- Encoding.decodeStrictByteStringExplicit EncUTF8.UTF8 "\192\NUL"
+-- Right "\NUL"
+-- Encoding.encodeStrictByteStringExplicit EncUTF8.UTF8 "\NUL"
+-- "\NUL"
+--
+-- >>> Encoding.decodeStrictByteStringExplicit EncASCII.ASCII "\239"
+-- Right "\239"
+encDynB :: forall s c .
+              (
+                DynEnc s
+                , Typed.Algorithm s "r-pkg/encoding"
+               ) => 
+               Typed.Encoding (Either Typed.EncodeEx) s "r-pkg/encoding" c B.ByteString
+encDynB = Typed._implEncodingEncodeEx @s  (Typed.verifyDynEnc (Proxy :: Proxy s) exferDynEncoding slowValidation)   
+   where 
+     -- see comments in fromDynEncB
+     slowValidation enc str = do
+        dec <- either (Left . DecErr) Right . Encoding.decodeStrictByteStringExplicit enc $ str
+        res <- either (Left . EncErr) Right . Encoding.encodeStrictByteStringExplicit enc $ dec  
+        if str == res 
+        then Right str
+        else Left DecEncMismatch      
+
+encDynBL :: forall s xs c .
+              (
+               DynEnc s
+               , Typed.Algorithm s "r-pkg/encoding"
+              ) => 
+              Typed.Encoding (Either Typed.EncodeEx) s "r-pkg/encoding" c BL.ByteString
+encDynBL = Typed._implEncodingEncodeEx @s (Typed.verifyDynEnc (Proxy :: Proxy s) exferDynEncoding slowValidation)              
+   where 
+     -- see comments in fromDynEncB
+     slowValidation enc str = do
+        dec <- either (Left . DecErr) Right . Encoding.decodeLazyByteStringExplicit enc $ str
+        res <- either (Left . EncErr) Right . Encoding.encodeLazyByteStringExplicit enc $ dec         
+        if str == res 
+        then Right str
+        else Left DecEncMismatch      
+
+encDynS :: forall s c .
+              (
+                DynEnc s
+                , Typed.Algorithm s "r-pkg/encoding"
+               ) => 
+               Typed.Encoding (Either Typed.EncodeEx) s "r-pkg/encoding" c String
+encDynS = Typed._implEncodingEncodeEx @s  (Typed.verifyDynEnc (Proxy :: Proxy s) exferDynEncoding slowValidation)   
+   where 
+     -- see comments in fromDynEncB
+     slowValidation enc str = do
+        dec <- either (Left . DecErr) Right . Encoding.decodeStringExplicit enc $ str
+        res <- either (Left . EncErr) Right . Encoding.encodeStringExplicit enc $ dec  
+        if str == res 
+        then Right str
+        else Left DecEncMismatch      
 
 
 -- * Helpers
