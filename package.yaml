@@ -33,7 +33,6 @@ library:
     - -fwarn-incomplete-patterns
     - -fprint-explicit-kinds
 
-
 tests:
   typed-encoding-encoding-test:
     main:                Spec.hs
@@ -44,5 +43,21 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - typed-encoding-encoding
+    - typed-encoding >= 0.4 && < 0.5
+    - hspec 
+    - QuickCheck  >= 2.13.1 && < 2.14
+    - quickcheck-instances >= 0.3.20 && < 0.4
+    - doctest >= 0.16 && < 0.17
+    - doctest-discover >= 0.2 && < 0.3
+
+  typed-encoding-encoding-doctest:
+    main:                Spec.hs
+    source-dirs:         doctest
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - typed-encoding >= 0.4 && < 0.5
     - doctest >= 0.16 && < 0.17
     - doctest-discover >= 0.2 && < 0.3

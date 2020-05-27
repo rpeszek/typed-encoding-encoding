@@ -16,7 +16,10 @@
 --
 -- This module contains combinators which are polymorphic in the symbol annotation.
 --
--- Sadly, /encoding/ library does not provide ways to encode and decode the popular @Text@ type (from the /text/ package).  
+-- Sadly, /encoding/ library does not provide ways to encode and decode the popular @Text@ type (from the /text/ package). 
+-- Also there seems to be no easy way to verify encoding. Provided decode functions are very forgiving and work 
+-- on invalid encoded inputs. This forces us to resort to checking that @Encoding.encodeXyz . Encoding.decodeXyz@ 
+-- acts are identity.  This is obviously expensive.  
 --
 -- Key instances defined here are 'Typed.ToEncString' and 'Typed.FromEncString'.
 -- These allow to create encoded @ByteString@ from a String (@ToEncString@) and decode @ByteString@ back (@ToEncString@).
@@ -43,12 +46,14 @@ import qualified Data.List as L
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 
+import           Data.Encoding.UTF8 as EncUTF8
 
 -- $setup
 -- >>> :set -XOverloadedStrings -XDataKinds -XTypeApplications -XFlexibleContexts
 -- >>> import           Data.Functor.Identity
 -- >>> import qualified Data.TypedEncoding as Usage
-
+-- >>> import           Data.Encoding.ASCII as EncASCII
+-- >>> import           Data.Encoding.UTF8 as EncUTF8
 
 type family IsDynEnc (s :: Symbol) :: Bool where
     IsDynEnc s = Typed.AcceptEq ('Text "Not encoding restriction " ':<>: ShowType s ) (CmpSymbol (Typed.TakeUntil s ":") "r-pkg/encoding")
@@ -116,7 +121,7 @@ instance (Typed.UnexpectedDecodeErr f, Monad f, DynEnc s, Typed.Algorithm s "r-p
 --   @B.ByteString 
 --   . Usage.toEncoding () $ "\193\226\208\226\236\255"
 -- :}
--- Left (EncodeEx "r-pkg/encoding:greek" (IllegalCharacter 255))
+-- Left (EncodeEx "r-pkg/encoding:greek" (DecErr (IllegalCharacter 255)))
 instance (DynEnc s, Typed.Algorithm s "r-pkg/encoding") => Typed.Encode (Either Typed.EncodeEx) s "r-pkg/encoding" c B.ByteString where
     encoding = encDynB
 
@@ -139,21 +144,47 @@ instance (KnownSymbol s, Typed.Restriction s, Typed.Algorithm s "r-pkg/encoding"
 --   @B.ByteString  
 --   . Usage.toEncoding () $ "\193\226\208\226\236\255"
 -- :}
--- Left (RecreateEx "r-pkg/encoding:greek" (IllegalCharacter 255))
+-- Left (RecreateEx "r-pkg/encoding:greek" (DecErr (IllegalCharacter 255)))
 instance (KnownSymbol s , DynEnc s, Typed.Algorithm s "r-pkg/encoding", Typed.RecreateErr f, Applicative f) => Typed.Validate f s "r-pkg/encoding" c B.ByteString where
     validation = Typed.validFromEnc' @"r-pkg/encoding" encDynB
 
 
 -- * Encoding Combinators
 
+data DecodeOrEncodeException = 
+  DecErr Encoding.DecodingException 
+  | EncErr Encoding.EncodingException 
+  | DecEncMismatch 
+  deriving (Show, Eq)
+
 -- | Encoding ByteString just verifies its byte layout
+-- 
+-- /encoding/ package decoding is very forgiving, can decode invalid data, this makes things hard:
+--
+-- Encoding.decodeStrictByteStringExplicit EncUTF8.UTF8 "\192\NUL"
+-- Right "\NUL"
+-- Encoding.encodeStrictByteStringExplicit EncUTF8.UTF8 "\NUL"
+-- "\NUL"
+--
+-- >>> Encoding.decodeStrictByteStringExplicit EncASCII.ASCII "\239"
+-- Right "\239"
+
+
 encDynB :: forall s c .
               (
                 DynEnc s
                 , Typed.Algorithm s "r-pkg/encoding"
                ) => 
                Typed.Encoding (Either Typed.EncodeEx) s "r-pkg/encoding" c B.ByteString
-encDynB = Typed._implEncodingEncodeEx @s  (Typed.verifyDynEnc (Proxy :: Proxy s) verifyDynEncoding Encoding.decodeStrictByteStringExplicit)              
+encDynB = Typed._implEncodingEncodeEx @s  (Typed.verifyDynEnc (Proxy :: Proxy s) exferDynEncoding slowValidation)   
+   where 
+     -- see comments in fromDynEncB
+     slowValidation enc str = do
+        dec <- either (Left . DecErr) Right . Encoding.decodeStrictByteStringExplicit enc $ str
+        res <- either (Left . EncErr) Right . Encoding.encodeStrictByteStringExplicit enc $ dec  
+        if str == res 
+        then Right str
+        else Left DecEncMismatch      
 
 encDynBL :: forall s xs c .
               (
@@ -161,18 +192,45 @@ encDynBL :: forall s xs c .
                , Typed.Algorithm s "r-pkg/encoding"
               ) => 
               Typed.Encoding (Either Typed.EncodeEx) s "r-pkg/encoding" c BL.ByteString
-encDynBL = Typed._implEncodingEncodeEx @s (Typed.verifyDynEnc (Proxy :: Proxy s) verifyDynEncoding Encoding.decodeLazyByteStringExplicit)              
+encDynBL = Typed._implEncodingEncodeEx @s (Typed.verifyDynEnc (Proxy :: Proxy s) exferDynEncoding slowValidation)              
+   where 
+     -- see comments in fromDynEncB
+     slowValidation enc str = do
+        dec <- either (Left . DecErr) Right . Encoding.decodeLazyByteStringExplicit enc $ str
+        res <- either (Left . EncErr) Right . Encoding.encodeLazyByteStringExplicit enc $ dec         
+        if str == res 
+        then Right str
+        else Left DecEncMismatch      
+
+encDynS :: forall s c .
+              (
+                DynEnc s
+                , Typed.Algorithm s "r-pkg/encoding"
+               ) => 
+               Typed.Encoding (Either Typed.EncodeEx) s "r-pkg/encoding" c String
+encDynS = Typed._implEncodingEncodeEx @s  (Typed.verifyDynEnc (Proxy :: Proxy s) exferDynEncoding slowValidation)   
+   where 
+     -- see comments in fromDynEncB
+     slowValidation enc str = do
+        dec <- either (Left . DecErr) Right . Encoding.decodeStringExplicit enc $ str
+        res <- either (Left . EncErr) Right . Encoding.encodeStringExplicit enc $ dec  
+        if str == res 
+        then Right str
+        else Left DecEncMismatch      
 
 -- * Conversion To ByteString
 
 -- |
 -- 
--- >>> toDynEncB @"r-pkg/encoding:cyrillic" "Статья"
--- Right (UnsafeMkEnc Proxy () "\193\226\208\226\236\239")
---
--- >>> Typed.displ <$> toDynEncB @"r-pkg/encoding:cyrillic" "Статья"
--- Right "Enc '[r-pkg/encoding:cyrillic] () (ByteString \193\226\208\226\236\239)"
+-- >>> Typed.displ <$> toDynEncB @"r-pkg/encoding:cyrillic" "а на животе кнопка"
+-- Right "Enc '[r-pkg/encoding:cyrillic] () (ByteString \208 \221\208 \214\216\210\222\226\213 \218\221\222\223\218\208)"
 -- 
+-- >>> Typed.displ <$> toDynEncB @"r-pkg/encoding:koi8_r" "а на животе кнопка"
+-- Right "Enc '[r-pkg/encoding:koi8_r] () (ByteString \193 \206\193 \214\201\215\207\212\197 \203\206\207\208\203\193)"
+--
+-- >>> "а на животе кнопка"
+-- "\1072 \1085\1072 \1078\1080\1074\1086\1090\1077 \1082\1085\1086\1087\1082\1072"
+--
 -- >>> "Статья"
 -- "\1057\1090\1072\1090\1100\1103"
 --
@@ -186,7 +244,7 @@ toDynEncB :: forall s .
               String -> Either Typed.EncodeEx (Typed.Enc '[s] () B.ByteString)
 toDynEncB s = 
     do 
-        enc <- Typed.asEncodeEx p . verifyDynEncoding $ p
+        enc <- Typed.asEncodeEx p . exferDynEncoding $ p
         fmap (Typed.unsafeSetPayload ()) . Typed.asEncodeEx p . Encoding.encodeStrictByteStringExplicit enc $ s
         where 
           p = Proxy :: Proxy s
@@ -203,7 +261,7 @@ toDynEncBL :: forall s .
               String -> Either Typed.EncodeEx (Typed.Enc '[s] () BL.ByteString)
 toDynEncBL s = 
     do 
-        enc <- Typed.asEncodeEx p $ verifyDynEncoding p
+        enc <- Typed.asEncodeEx p $ exferDynEncoding p
         fmap (Typed.unsafeSetPayload ()) . Typed.asEncodeEx p . Encoding.encodeLazyByteStringExplicit enc $ s
         where 
           p = Proxy :: Proxy s
@@ -216,8 +274,18 @@ toDynEncBL s =
 -- >>> fromDynEncB @"r-pkg/encoding:cyrillic" @Identity (Typed.unsafeSetPayload () "\193\226\208\226\236\239")
 -- Identity "\1057\1090\1072\1090\1100\1103"
 --
+-- The following example demonstrates an interesting bit about the /encoding/ package, we are decoding not an /ASCII/ encoding:
+--
 -- >>> fromDynEncB @"r-pkg/encoding:ascii" @Identity (Typed.unsafeSetPayload () "\193\226\208\226\236\239")
 -- Identity "\193\226\208\226\236\239"
+--
+-- >>> Encoding.decodeStrictByteStringExplicit EncASCII.ASCII "\193\226\208\226\236\239"
+-- Right "\193\226\208\226\236\239"
+--
+-- This is OK, with extra /type-encoding/ type safety the only way to get invalid payload into @"r-pkg/encoding:ascii"@
+-- is by using one of the unsafe functions.  One can imagine this being error prone otherwise. 
+--
+-- Moreover, this prevents easy creation of 'Typed.Encode' instances!
 fromDynEncB :: forall s f .
                      (Typed.UnexpectedDecodeErr f
                      , Monad f
@@ -227,7 +295,7 @@ fromDynEncB :: forall s f .
                      Typed.Enc '[s] () B.ByteString -> f String
 fromDynEncB x = 
   do 
-    enc <- Typed.asUnexpected @s . verifyDynEncoding $ p
+    enc <- Typed.asUnexpected @s . exferDynEncoding $ p
     Typed.asUnexpected @s . Encoding.decodeStrictByteStringExplicit enc . Typed.getPayload $ x
   where p = Proxy :: Proxy s
 
@@ -241,7 +309,7 @@ fromDynEncBL :: forall s f .
                      Typed.Enc '[s] () BL.ByteString -> f String
 fromDynEncBL x = 
   do 
-    enc <- Typed.asUnexpected @s . verifyDynEncoding $ p
+    enc <- Typed.asUnexpected @s . exferDynEncoding $ p
     Typed.asUnexpected @s . Encoding.decodeLazyByteStringExplicit enc . Typed.getPayload $ x
   where p = Proxy :: Proxy s
 
@@ -256,8 +324,8 @@ getDynEncoding _ = Encoding.encodingFromString nm
 
 -- * Implementation
 
-verifyDynEncoding :: (KnownSymbol s, DynEnc s) => Proxy s -> Either String Encoding.DynEncoding
-verifyDynEncoding p = explainMaybe ("Invalid encoding " ++ nm) . Encoding.encodingFromStringExplicit $ nm 
+exferDynEncoding :: (KnownSymbol s, DynEnc s) => Proxy s -> Either String Encoding.DynEncoding
+exferDynEncoding p = explainMaybe ("Invalid encoding " ++ nm) . Encoding.encodingFromStringExplicit $ nm 
   where 
       nm = L.drop 15 . symbolVal $ p
       explainMaybe _ (Just x) = Right x
@@ -278,7 +346,10 @@ type instance Typed.IsSupersetOpen "r-ASCII" "r-pkg/encoding:iso_ir_6"        x 
 type instance Typed.IsSupersetOpen "r-ASCII" "r-pkg/encoding:us"              x xs = 'True
 type instance Typed.IsSupersetOpen "r-ASCII" "r-pkg/encoding:us_ascii"        x xs = 'True
 
-type instance Typed.IsSupersetOpen "r-CHAR8" "r-pkg/encoding:koi8_r"          x xs = 'True   
+type instance Typed.IsSupersetOpen "r-UTF8" "r-pkg/encoding:utf_8"             x xs = 'True   
+type instance Typed.IsSupersetOpen "r-UTF8" "r-pkg/encoding:utf8"              x xs = 'True  
+
+type instance Typed.IsSupersetOpen "r-CHAR8" "r-pkg/encoding:koi8_r"            x xs = 'True   
 type instance Typed.IsSupersetOpen "r-CHAR8" "r-pkg/encoding:cskoi8r"           x xs = 'True  
 type instance Typed.IsSupersetOpen "r-CHAR8" "r-pkg/encoding:koi8_u"            x xs = 'True  
 type instance Typed.IsSupersetOpen "r-CHAR8" "r-pkg/encoding:iso_8859_1"        x xs = 'True  
@@ -416,5 +487,5 @@ type instance Typed.IsSupersetOpen "r-CHAR8" "r-pkg/encoding:cp869"             
 type instance Typed.IsSupersetOpen "r-CHAR8" "r-pkg/encoding:cp874"             x xs = 'True  
 type instance Typed.IsSupersetOpen "r-CHAR8" "r-pkg/encoding:cp932"             x xs = 'True  
 
-
+type instance Typed.IsSupersetOpen "r-CHAR8" "r-pkg/encoding:jis_x_0208"        x xs = 'True 
 -- :t Tst.pack :: Typed.Enc '["r-pkg/encoding:windows_1255"] c String -> _
