@@ -395,8 +395,9 @@ type instance Typed.IsSupersetOpen "r-ASCII" "r-pkg/encoding:iso_ir_6"        x 
 type instance Typed.IsSupersetOpen "r-ASCII" "r-pkg/encoding:us"              x xs = 'True
 type instance Typed.IsSupersetOpen "r-ASCII" "r-pkg/encoding:us_ascii"        x xs = 'True
 
-type instance Typed.IsSupersetOpen "r-UTF8" "r-pkg/encoding:utf_8"             x xs = 'True   
-type instance Typed.IsSupersetOpen "r-UTF8" "r-pkg/encoding:utf8"              x xs = 'True  
+-- "r-UTF8" has additional Unicode D76 restriction and hence is not superset 
+-- type instance Typed.IsSupersetOpen "r-UTF8" "r-pkg/encoding:utf_8"             x xs = 'True   
+-- type instance Typed.IsSupersetOpen "r-UTF8" "r-pkg/encoding:utf8"              x xs = 'True  
 
 type instance Typed.IsSupersetOpen "r-CHAR8" "r-pkg/encoding:koi8_r"            x xs = 'True   
 type instance Typed.IsSupersetOpen "r-CHAR8" "r-pkg/encoding:cskoi8r"           x xs = 'True  

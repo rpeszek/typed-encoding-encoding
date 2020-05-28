@@ -31,7 +31,9 @@ spec =
     describe "Superset checks" $ 
         describe "ASCII on ByteString" $ do
             it "r-ASCII > ascii" $ property $ propSuperset_ @"r-ASCII" @"r-pkg/encoding:ascii"               encoding encDynS 
-            it "r-UTF8 > utf8"   $ property $ propSuperset_ @"r-UTF8"  @"r-pkg/encoding:utf8"                encoding encDynB 
+            
+            -- "r-UTF8" has additional Unicode D76 restriction and hence is not superset 
+            -- it "r-UTF8 > utf8"   $ property $ propSuperset_ @"r-UTF8"  @"r-pkg/encoding:utf8"                encoding encDynB 
              
             -- checking r-CHAR8  is useless as valid "r-" encoding are 1 byte layouts, encoded means set of char encoded bytes < 255
             -- this is basically true for all encodings
