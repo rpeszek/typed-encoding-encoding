@@ -5,10 +5,10 @@ packages:
 
 extra-deps:
 - symbols-0.3.0.0 
-- typed-encoding-0.4.0.0  
+# - typed-encoding-0.4.0.0  
 - containers-0.5.11.0
 - regex-compat-0.93.1
 - HaXml-1.25.5
 - encoding-0.8.5 
-# - git: git@github.com:rpeszek/typed-encoding
-#   commit: v0.4.0.0-rc.2
+- git: git@github.com:rpeszek/typed-encoding
+  commit: 63d5cc28442afab99ea4442c3c90500f3d75d907
