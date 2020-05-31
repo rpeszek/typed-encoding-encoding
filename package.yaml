@@ -22,7 +22,7 @@ description:         Please see the README on GitHub at <https://github.com/rpes
 dependencies:
 - base >= 4.10 && < 5
 - encoding >= 0.8.5 && < 0.9
-- typed-encoding >= 0.4 && < 0.5
+- typed-encoding >= 0.4.1 && < 0.5
 - bytestring >= 0.10 && < 0.11
 
 
@@ -43,7 +43,7 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - typed-encoding-encoding
-    - typed-encoding >= 0.4 && < 0.5
+    - typed-encoding >= 0.4.1 && < 0.5
     - hspec 
     - QuickCheck  >= 2.13.1 && < 2.14
     - quickcheck-instances >= 0.3.20 && < 0.4

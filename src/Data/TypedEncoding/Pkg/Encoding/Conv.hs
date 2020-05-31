@@ -22,13 +22,27 @@
 -- * 'Encoding.decodeStringExplicit'
 --
 --
--- Current /encoding v0.8.5/ implementation has some peculiarities, for example /cp1257/ is a single bit encoding and 
--- one could expect this to fail, but it succeeds:
+-- == Warnings
+--
+-- These conversions are provides AS-IS and assume that /encoding/ functions behave
+-- in a way consistent with /typed-encoding/ type definitions. 
+-- 
+-- For example, /typed-encoding/ effectively guarantees that decode function will never fail
+-- and it is safe to use @Identity@ instance of the @UnexpectedDecodeErr@ class.
+--
+-- In /encoding v0.8.5/, the decoding can fail after the encoding succeeded:
+--
+-- >>> Encoding.encodeStringExplicit EncCP932.CP932 "\DEL"
+-- Right "\DEL"
+-- >>> Encoding.decodeStringExplicit EncCP932.CP932 "\DEL"
+-- Left (IllegalCharacter 127)
+--
+-- Here are some other peculiarities:
+--
+-- /cp1257/ is a single bit encoding and one could expect this to fail, but it succeeds:
 --
 -- >>> Encoding.encodeStringExplicit (Encoding.encodingFromString "cp1257") "\x100"
 -- Right "\194"
---
--- (other one bit encodings exhibit similar /forgives/ not just /cp1257/)
 --
 -- Decoding can also be surprising:
 --
@@ -41,13 +55,6 @@
 -- Right "\NUL"
 -- >>> Encoding.encodeStringExplicit EncUTF8.UTF8 "\NUL"
 -- Right "\NUL"
---
--- Decoding can fail when encoding succeeds:
---
--- >>> Encoding.encodeStringExplicit EncCP932.CP932 "\DEL"
--- Right "\DEL"
--- >>> Encoding.decodeStringExplicit EncCP932.CP932 "\DEL"
--- Left (IllegalCharacter 127)
 --
 -- This package does not try to fix these issues, only provides a wrapper 
 -- that annotates encodings as symbols.
@@ -174,18 +181,6 @@ encString = Typed._mkEncoding encodeStringExplicit
 --
 -- >>> fmap Typed.displ $ decodeStrictByteStringExplicit @"enc-pkg/encoding:cyrillic" @'[] @Identity (Typed.unsafeSetPayload () "\193\226\208\226\236\239")
 -- Identity "Enc '[] () (String \1057\1090\1072\1090\1100\1103)"
---
--- The following example demonstrates an interesting bit about the /encoding/ package, we are decoding not an /ASCII/ encoding:
---
--- >>> fmap Typed.displ $ decodeStrictByteStringExplicit @"enc-pkg/encoding:ascii" @'[] @Identity (Typed.unsafeSetPayload () "\193\226\208\226\236\239")
--- Identity "Enc '[] () (String \193\226\208\226\236\239)"
---
--- >>> Encoding.decodeStrictByteStringExplicit EncASCII.ASCII "\236\239"
--- Right "\236\239"
---
--- This is OK, with extra /type-encoding/ type safety the only way to get invalid payload into @"enc-pkg/encoding:ascii"@
--- is by using one of the unsafe functions.  One can imagine forgiving nature of 'Encoding.decodeStrictByteStringExplicit ' 
--- being error prone otherwise. 
 decodeStrictByteStringExplicit :: forall s xs f c .
                      (Typed.UnexpectedDecodeErr f
                      , Monad f

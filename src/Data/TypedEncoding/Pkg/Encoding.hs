@@ -14,7 +14,8 @@
 --
 -- == Warnings / Issues
 --
--- The /encoding/ package can exhibit a potentially unexpected behavior, examples of this are documented in
+-- The /encoding/ package can exhibit a surprising behavior that may not map well to
+-- type level guarantees that /typed-encoding/ tries to enforce, examples of this are documented in
 --
 -- "Data.TypedEncoding.Pkg.Encoding.Conv"
 -- 

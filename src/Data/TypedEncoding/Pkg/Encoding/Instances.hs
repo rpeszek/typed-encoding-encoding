@@ -15,7 +15,9 @@
 -- These allow to create encoded @ByteString@ from a String (@ToEncString@) and decode @ByteString@ back (@ToEncString@).
 --
 -- The String 'Typed.Encode', 'Typed.Decode' instances is less interesting since is works with @String@ type only.
-
+--
+-- See the /warnings/ section of 
+-- "Data.TypedEncoding.Pkg.Encoding.Conv"
 
 
 module Data.TypedEncoding.Pkg.Encoding.Instances where 

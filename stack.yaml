@@ -11,4 +11,4 @@ extra-deps:
 - HaXml-1.25.5
 - encoding-0.8.5 
 - git: git@github.com:rpeszek/typed-encoding
-  commit: 63d5cc28442afab99ea4442c3c90500f3d75d907
+  commit: v0.4.1.0-rc.1
