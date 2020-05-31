@@ -14,34 +14,43 @@
 -- | 
 -- Contains type save equivalents of the following functions defined in /encoding/:
 --
--- @encodeStrictByteStringExplicit@
--- @encodeLazyByteStringExplicit@
--- @encString@
--- @decodeStrictByteStringExplicit@
--- @decodeLazyByteStringExplicit@
--- @decodeStringExplicit@
+-- * 'Encoding.encodeStrictByteStringExplicit'
+-- * 'Encoding.encodeLazyByteStringExplicit'
+-- * 'Encoding.encString'
+-- * 'Encoding.decodeStrictByteStringExplicit'
+-- * 'Encoding.decodeLazyByteStringExplicit'
+-- * 'Encoding.decodeStringExplicit'
 --
--- Key instances defined here are 'Typed.ToEncString' and 'Typed.FromEncString'.
--- These allow to create encoded @ByteString@ from a String (@ToEncString@) and decode @ByteString@ back (@ToEncString@).
 --
--- Other instances are less interesting, are very expensive, and only provide validation facilities.
+-- Current /encoding v0.8.5/ implementation has some peculiarities, for example /cp1257/ is a single bit encoding and 
+-- one could expect this to fail, but it succeeds:
 --
--- It should be possible to create more efficient versions of 'Typed.Encode' in the future, which do not use String decoding under the hood
--- but because of the forgiving nature of decode architecture in this library this may not fix the core performance problem.
+-- >>> Encoding.encodeStringExplicit (Encoding.encodingFromString "cp1257") "\x100"
+-- Right "\194"
 --
--- == Naming conventions
--- 
--- @"enc-pkg/encoding:[encoding]"@ - where @"[encoding]"@ is String name used by the 'Encoding.DynEncoding' in the /encoding/ package.
+-- (other one bit encodings exhibit similar /forgives/ not just /cp1257/)
 --
--- Example: @"enc-pkg/encoding:cyrillic"@
+-- Decoding can also be surprising:
 --
--- Superset instances are provided in separate packages located in
+-- >>> Encoding.decodeStringExplicit EncASCII.ASCII "\236\239"
+-- Right "\236\239"
 --
--- "Data.TypedEncoding.Pkg.Instances.Restriction.Encoding.Superset" 
+-- here is UTF8 decoding
 --
--- with one exception:
+-- >>> Encoding.decodeStringExplicit EncUTF8.UTF8 "\192\NUL"
+-- Right "\NUL"
+-- >>> Encoding.encodeStringExplicit EncUTF8.UTF8 "\NUL"
+-- Right "\NUL"
 --
--- "Data.TypedEncoding.Pkg.Instances.Restriction.Encoding.Warn.UTF8"
+-- Decoding can fail when encoding succeeds:
+--
+-- >>> Encoding.encodeStringExplicit EncCP932.CP932 "\DEL"
+-- Right "\DEL"
+-- >>> Encoding.decodeStringExplicit EncCP932.CP932 "\DEL"
+-- Left (IllegalCharacter 127)
+--
+-- This package does not try to fix these issues, only provides a wrapper 
+-- that annotates encodings as symbols.
 
 
 module Data.TypedEncoding.Pkg.Encoding.Conv where 
@@ -56,7 +65,9 @@ import qualified Data.List as L
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 
-
+-- import           Data.Encoding.ASCII as EncASCII
+-- import           Data.Encoding.UTF8 as EncUTF8
+-- import           Data.Encoding.CP932 as EncCP932
 
 -- $setup
 -- >>> :set -XOverloadedStrings -XDataKinds -XTypeApplications -XFlexibleContexts
@@ -64,6 +75,7 @@ import qualified Data.ByteString.Lazy as BL
 -- >>> import qualified Data.TypedEncoding as Usage
 -- >>> import           Data.Encoding.ASCII as EncASCII
 -- >>> import           Data.Encoding.UTF8 as EncUTF8
+-- >>> import           Data.Encoding.CP932 as EncCP932
 
 type family IsDynEnc (s :: Symbol) :: Bool where
     IsDynEnc s = Typed.AcceptEq ('Text "Not encoding restriction " ':<>: ShowType s ) (CmpSymbol (Typed.TakeUntil s ":") "enc-pkg/encoding")
@@ -88,8 +100,14 @@ type DynEnc s = (KnownSymbol s, IsDynEnc s ~ 'True)
 -- >>> "Статья"
 -- "\1057\1090\1072\1090\1100\1103"
 --
+-- >>> fmap Typed.displ . encodeStrictByteStringExplicit @"enc-pkg/encoding:cyrillic" . Typed.toEncoding () $ "Статья"
+-- Right "Enc '[enc-pkg/encoding:cyrillic] () (ByteString \193\226\208\226\236\239)"
+--
 -- >>> encodeStrictByteStringExplicit @"enc-pkg/encoding:ascii" . Typed.toEncoding () $ "Статья"
 -- Left (EncodeEx "enc-pkg/encoding:ascii" (HasNoRepresentation '\1057'))
+--
+-- >>> fmap Typed.displ . encodeStrictByteStringExplicit @"enc-pkg/encoding:ascii" . Typed.toEncoding () $ "story"
+-- Right "Enc '[enc-pkg/encoding:ascii] () (ByteString story)"
 encodeStrictByteStringExplicit :: forall s xs c .
              (
                 DynEnc s

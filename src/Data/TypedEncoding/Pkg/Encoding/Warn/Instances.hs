@@ -12,52 +12,46 @@
 {-# LANGUAGE ConstraintKinds #-}
 
 -- | 
--- Key instances defined here are 'Typed.ToEncString' and 'Typed.FromEncString'.
--- These allow to create encoded @ByteString@ from a String (@ToEncString@) and decode @ByteString@ back (@ToEncString@).
+-- There seems to be no easy ways to verify encoding using the /encoding/ package. 
 --
--- This module also implements Encode / Decode instances for @String@,
---
--- Validate instance is 
---  
--- There seems to be no easy way to verify encoding using the /encoding/ package. 
--- Provided decode functions are very forgiving and work 
--- on invalid encoded inputs. This forces us to resort to checking that 
+-- /decode/ functions implemented in /encoding/ are very forgiving and work 
+-- on invalid encoded inputs. This forces this package to resort to checking that 
 --
 -- @
 -- Encoding.encodeXyz . Encoding.decodeXyz
 -- @
 -- 
--- acts are identity.  This is obviously expensive. 
+-- acts as the identity.  This is obviously quite expensive. 
 -- 
--- This module provides such implementation with a warning.
+-- This module provides such implementation and hence the warning.
 --
--- -- | Encoding ByteString just verifies its byte layout
--- -- 
--- -- /encoding/ package decoding is very forgiving, can decode invalid data, this makes things hard:
--- --
--- -- Encoding.decodeStrictByteStringExplicit EncUTF8.UTF8 "\192\NUL"
--- -- Right "\NUL"
--- -- Encoding.encodeStrictByteStringExplicit EncUTF8.UTF8 "\NUL"
--- -- "\NUL"
+-- >>> Encoding.decodeStrictByteStringExplicit EncUTF8.UTF8 "\192\NUL"
+-- Right "\NUL"
+--
+-- >>> Encoding.encodeStrictByteStringExplicit EncUTF8.UTF8 "\NUL"
+-- Right "\NUL"
 
 
 module Data.TypedEncoding.Pkg.Encoding.Warn.Instances {-# WARNING "Not optimized for performance" #-} where 
-
-
 
 import qualified Data.TypedEncoding.Instances.Support as Typed
 import qualified Data.Encoding as Encoding
 
 import           GHC.TypeLits
 import           Data.Proxy
--- import qualified Data.List as L
--- import qualified Data.ByteString as B
--- import qualified Data.ByteString.Lazy as BL
-
--- import           Data.Encoding.UTF8 as EncUTF8
 
 import           Data.TypedEncoding.Pkg.Encoding.Conv
 
+
+-- import qualified Data.TypedEncoding as Usage
+-- import           Data.Encoding.UTF8 as EncUTF8
+
+
+-- $setup
+-- >>> :set -XOverloadedStrings -XDataKinds -XTypeApplications -XFlexibleContexts
+-- >>> import           Data.Functor.Identity
+-- >>> import qualified Data.TypedEncoding as Usage
+-- >>> import           Data.Encoding.UTF8 as EncUTF8
 
 
 -- * Validation Combinators (Slow)
@@ -86,20 +80,40 @@ validatingDecS = Typed._implDecodingF (verifyDynDec (Proxy :: Proxy s) exferDynE
         else Left DecEncMismatch      
 
 
--- -- |
--- -- For "r-" encodings this is the same as @Encode@.
--- --
--- -- >>> :{ 
--- -- fmap Usage.displ 
--- --   . Usage.recreateFAll' 
--- --   @'["enc-pkg/encoding"] 
--- --   @'["enc-pkg/encoding:greek"] 
--- --   @(Either Usage.RecreateEx) 
--- --   @() 
--- --   @B.ByteString  
--- --   . Usage.toEncoding () $ "\193\226\208\226\236\255"
--- -- :}
--- -- Left (RecreateEx "enc-pkg/encoding:greek" (DecErr (IllegalCharacter 255)))
+-- tst = fmap Usage.displ .
+--   Usage.recreateFAll' 
+--    @'["enc-pkg/encoding"] 
+--    @'["enc-pkg/encoding:cyrillic"] 
+--    @(Either Usage.RecreateEx) 
+--    @() 
+--    @String . Usage.toEncoding () $ "\193\226\208\226\236\239"
+
+
+-- |
+--
+-- >>> :{ 
+--  fmap Usage.displ .
+--   Usage.recreateFAll' 
+--    @'["enc-pkg/encoding"] 
+--    @'["enc-pkg/encoding:greek"] 
+--    @(Either Usage.RecreateEx) 
+--    @() 
+--    @String . Usage.toEncoding () $ "\193\226\208\226\236\255"
+-- :}
+-- Left (RecreateEx "enc-pkg/encoding:greek" (DecErr (IllegalCharacter 255)))
+--
+--  "Статья" example:
+--
+-- >>> :{ 
+-- fmap Usage.displ .
+--   Usage.recreateFAll' 
+--   @'["enc-pkg/encoding"] 
+--   @'["enc-pkg/encoding:cyrillic"] 
+--   @(Either Usage.RecreateEx) 
+--   @() 
+--   @String . Usage.toEncoding () $ "\193\226\208\226\236\239"
+-- :}
+-- Right "Enc '[enc-pkg/encoding:cyrillic] () (String \193\226\208\226\236\239)"
 instance (KnownSymbol s , DynEnc s, Typed.Algorithm s "enc-pkg/encoding", Typed.RecreateErr f, Applicative f) => Typed.Validate f s "enc-pkg/encoding" c String where
     validation = Typed.validFromDec' @"enc-pkg/encoding" validatingDecS
 

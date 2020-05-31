@@ -1,23 +1,23 @@
 name:                typed-encoding-encoding
 version:             0.1.0.0
-github:              "githubuser/typed-encoding-encoding"
+github:              "rpeszek/typed-encoding-encoding"
 license:             BSD3
-author:              "Author name here"
-maintainer:          "example@example.com"
-copyright:           "2020 Author name here"
+author:              "Robert Peszek"
+maintainer:          "robpeszek@gmail.com"
+copyright:           "2020 Robert Peszek"
 
 extra-source-files:
 - README.md
 - ChangeLog.md
 
 # Metadata used when publishing your package
-# synopsis:            Short description of your package
-# category:            Web
+synopsis:            Bridge between encoding and typed-encoding packages
+category:            Data, Text
 
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on GitHub at <https://github.com/githubuser/typed-encoding-encoding#readme>
+description:         Please see the README on GitHub at <https://github.com/rpeszek/typed-encoding-encoding#readme>
 
 dependencies:
 - base >= 4.10 && < 5
