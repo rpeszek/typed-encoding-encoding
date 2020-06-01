@@ -102,7 +102,7 @@ validatingDecS = Typed._implDecodingF (verifyDynDec (Proxy :: Proxy s) exferDynE
 -- :}
 -- Left (RecreateEx "enc-pkg/encoding:greek" (DecErr (IllegalCharacter 255)))
 --
---  "Статья" example:
+--  @\"Статья\"@ example:
 --
 -- >>> :{ 
 -- fmap Usage.displ .

@@ -72,9 +72,6 @@ import qualified Data.List as L
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 
--- import           Data.Encoding.ASCII as EncASCII
--- import           Data.Encoding.UTF8 as EncUTF8
--- import           Data.Encoding.CP932 as EncCP932
 
 -- $setup
 -- >>> :set -XOverloadedStrings -XDataKinds -XTypeApplications -XFlexibleContexts
@@ -94,6 +91,11 @@ type DynEnc s = (KnownSymbol s, IsDynEnc s ~ 'True)
 -- * Conversion To ByteString
 
 -- |
+-- @encodeStrictByteStringExplicit@ creates values of types like
+--
+-- @
+-- Enc '["enc-pkg/encoding:cyrillic"] () ByteString
+-- @
 -- 
 -- >>> fmap Typed.displ . encodeStrictByteStringExplicit @"enc-pkg/encoding:cyrillic" . Typed.toEncoding () $ "а на животе кнопка"
 -- Right "Enc '[enc-pkg/encoding:cyrillic] () (ByteString \208 \221\208 \214\216\210\222\226\213 \218\221\222\223\218\208)"
@@ -149,7 +151,9 @@ encodeLazyByteStringExplicit s =
 
 -- | 
 -- Converts 'String' to some @Enc '["enc-pkg/encoding:..."] () String@ type
--- by actually encoding characters in the String into correct byte layout.
+-- by actually encoding characters in the String into a certain byte layout.
+-- 
+-- The resulting payload has all Characters representing bytes, that is @< \'\\255\'@
 encodeStringExplicit :: forall s xs c .
              (
                 DynEnc s

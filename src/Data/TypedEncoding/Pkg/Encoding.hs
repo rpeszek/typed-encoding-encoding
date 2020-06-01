@@ -12,9 +12,9 @@
 --
 -- Example: @"enc-pkg/encoding:cyrillic"@
 --
--- == Warnings / Issues
+-- == Warnings / AS-IS type wrapping
 --
--- The /encoding/ package can exhibit a surprising behavior that may not map well to
+-- The /encoding/ package can exhibit behavior that may not map well to
 -- type level guarantees that /typed-encoding/ tries to enforce, examples of this are documented in
 --
 -- "Data.TypedEncoding.Pkg.Encoding.Conv"
